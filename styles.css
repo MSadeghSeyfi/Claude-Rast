@@ -99,15 +99,26 @@
   text-align: right !important;
 }
 
-/* ── 9. Safety guard: never apply RTL to UI chrome ── */
-nav *,
-header *,
-[data-testid="sidebar"] *,
-[data-testid="composer"] *,
-.ProseMirror *,
-footer * {
-  /* Explicitly un-inherit RTL direction so the above rules
-     cannot accidentally bleed into UI elements */
+/* ── 9. Chat input — RTL with auto-detection per paragraph ── */
+/* Uses dir=auto so each paragraph detects its own direction:
+   Persian text → RTL, English text → LTR. Best of both worlds. */
+[data-testid="chat-input"].ProseMirror {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: plaintext !important;
+}
+
+/* Paragraphs inside the input inherit auto-direction */
+[data-testid="chat-input"].ProseMirror p {
+  unicode-bidi: plaintext !important;
+  text-align: start !important;
+}
+
+/* Placeholder text should also be right-aligned */
+[data-testid="chat-input"].ProseMirror p.is-empty.is-editor-empty::before {
+  text-align: right !important;
+  direction: rtl !important;
+  float: right !important;
 }
 
 /* ── 10. Mixed-direction helpers ── */

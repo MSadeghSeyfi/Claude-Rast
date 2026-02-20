@@ -416,9 +416,22 @@ function fixContainer(container) {
   // fixInlineRTL(container);
 }
 
+// ─── Fix: Chat input field — set RTL direction ───────────────────────────
+// Makes the input box RTL so Persian text is typed right-to-left.
+// Uses dir="auto" on inner <p> elements so each paragraph auto-detects
+// its direction (Persian → RTL, English → LTR).
+function fixChatInput() {
+  document.querySelectorAll('[data-testid="chat-input"].ProseMirror').forEach(input => {
+    if (input.dataset.rtlxDone === '1') return;
+    input.setAttribute('dir', 'rtl');
+    input.dataset.rtlxDone = '1';
+  });
+}
+
 // ─── Main: Apply RTL fixes to ALL response containers on the page ─────────
 function applyAllRTLFixes() {
   if (!isRunning) return;
+  fixChatInput();
   const containers = getResponseContainers();
   containers.forEach(fixContainer);
 }
