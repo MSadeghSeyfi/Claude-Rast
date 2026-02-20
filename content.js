@@ -49,6 +49,9 @@ const BLOCK_ELEMENTS = new Set([
 // Elements where we must NOT touch content (code integrity)
 const CODE_ANCESTORS = new Set(['PRE', 'CODE', 'MATH', 'SCRIPT', 'STYLE']);
 
+// CSS classes that indicate a KaTeX/LaTeX ancestor (must stay LTR)
+const KATEX_CLASSES = ['katex', 'katex-html', 'katex-mathml', 'katex-display'];
+
 let isRunning = false;
 let debounceTimer = null;
 let observer = null;
@@ -90,11 +93,13 @@ function isRTLDominant(text) {
   return false;
 }
 
-// ─── Utility: Check if an element has a CODE/PRE ancestor ─────────────────
+// ─── Utility: Check if an element has a CODE/PRE/KaTeX ancestor ───────────
 function hasCodeAncestor(el) {
   let node = el.parentElement;
   while (node) {
     if (CODE_ANCESTORS.has(node.tagName)) return true;
+    // Check for KaTeX classes
+    if (node.classList && KATEX_CLASSES.some(cls => node.classList.contains(cls))) return true;
     node = node.parentElement;
   }
   return false;
@@ -132,18 +137,26 @@ function fixBiDiInTextNode(textNode) {
     match => LRI + match + PDI
   );
 
-  // Step 2: Wrap number+operator groups in LRI...PDI isolates.
-  // This handles "3 × 30", "3 × 12", "0.92", "25/100" etc.
-  // These are numeric expressions with operators/symbols between digits.
+  // Step 2: Wrap math operator + number groups in LRI...PDI isolates.
+  // This handles "= 1", "≥ 0", "≤ 100", "= 0.5" etc.
+  // The operator must stay visually adjacent to its number in RTL context.
   result = result.replace(
-    /\d[\d\s×x*.\-+/()%=,]*\d[\d.]*/g,
+    /[=<>≤≥≠≈+\-×÷]\s*\d[\d.]*/g,
     match => LRI + match + PDI
   );
 
-  // Step 3: Handle standalone single numbers adjacent to RTL text
+  // Step 3: Wrap number+operator groups in LRI...PDI isolates.
+  // This handles "3 × 30", "3 × 12", "0.92", "25/100" etc.
+  // These are numeric expressions with operators/symbols between digits.
+  result = result.replace(
+    /(?<!\u2069)\d[\d\s×x*.\-+/()%=,]*\d[\d.]*/g,
+    match => LRI + match + PDI
+  );
+
+  // Step 4: Handle standalone single numbers adjacent to RTL text
   // (e.g., "3 ست" → wrap "3" in isolate so it stays on the correct side)
   result = result.replace(
-    /(?<![.\d\u2066])(\d+)(?![.\d\u2069])/g,
+    /(?<![.\d\u2066\u2069])(\d+)(?![.\d\u2069])/g,
     LRI + '$1' + PDI
   );
 
@@ -189,7 +202,15 @@ function applyRTLToBlock(el) {
 }
 
 // ─── Fix: Replace LTR arrows with RTL arrows in text nodes ───────────────
+// When arrows are inside RTL blocks, we need TWO things:
+// 1. Swap the arrow direction (→ to ←)
+// 2. Wrap LTR words in LRI isolates so BiDi reorders them in RTL
+// Without step 2, "Settings ← Billing" stays as one LTR run and
+// doesn't get reordered. With both steps:
+//   Logical: ⁦Settings⁩ ← ⁦Billing⁩
+//   Visual:  Billing ← Settings  (Settings on right, pointing to Billing)
 function fixArrowsInElement(el) {
+  ARROW_REGEX.lastIndex = 0;
   if (!ARROW_REGEX.test(el.innerHTML)) return;
 
   const walker = document.createTreeWalker(
@@ -197,8 +218,9 @@ function fixArrowsInElement(el) {
     NodeFilter.SHOW_TEXT,
     {
       acceptNode(node) {
-        // Skip text nodes inside code/pre/math elements
+        // Skip text nodes inside code/pre/math/katex elements
         if (hasCodeAncestor(node)) return NodeFilter.FILTER_REJECT;
+        ARROW_REGEX.lastIndex = 0;
         return ARROW_REGEX.test(node.nodeValue)
           ? NodeFilter.FILTER_ACCEPT
           : NodeFilter.FILTER_SKIP;
@@ -210,12 +232,46 @@ function fixArrowsInElement(el) {
   while (walker.nextNode()) nodesToFix.push(walker.currentNode);
 
   for (const textNode of nodesToFix) {
+    let text = textNode.nodeValue;
+
+    // If this text node has no RTL chars and hasn't been BiDi-processed,
+    // wrap LTR words in isolates so BiDi reordering works correctly
+    // with the swapped arrows.
+    if (!hasRTLChars(text) && text.indexOf(LRI) === -1) {
+      text = text.replace(
+        /[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
+        match => LRI + match + PDI
+      );
+    }
+
+    // Swap arrow direction
     ARROW_REGEX.lastIndex = 0;
-    textNode.nodeValue = textNode.nodeValue.replace(
+    text = text.replace(
       ARROW_REGEX,
       match => ARROW_MAP[match] || match
     );
+
+    textNode.nodeValue = text;
   }
+}
+
+// ─── Fix: KaTeX/LaTeX elements inside RTL blocks — force LTR ─────────────
+// Math notation is universally LTR. The CSS handles visual styling, but
+// we also need to set attributes so the browser's BiDi algorithm doesn't
+// reorder elements inside the formula.
+function fixKaTeXInContainer(container) {
+  container.querySelectorAll('.katex').forEach(katex => {
+    if (katex.dataset.rtlxDone === '1') return;
+    // Force LTR on the katex root
+    katex.setAttribute('dir', 'ltr');
+    katex.dataset.rtlxDone = '1';
+  });
+  // Also handle display-mode KaTeX (block formulas)
+  container.querySelectorAll('.katex-display').forEach(kd => {
+    if (kd.dataset.rtlxDone === '1') return;
+    kd.setAttribute('dir', 'ltr');
+    kd.dataset.rtlxDone = '1';
+  });
 }
 
 // ─── Fix: Code Blocks containing RTL text ────────────────────────────────
@@ -237,6 +293,12 @@ function fixCodeBlocks(container) {
         // Detect if this is actual code or plain text
         const isActualCode = /\blanguage-\w+/.test(codeEl.className || '');
         pre.dataset.rtlxType = isActualCode ? 'code' : 'text';
+
+        // For text blocks, also apply RTL attributes directly
+        if (!isActualCode && isRTLDominant(text)) {
+          pre.setAttribute('dir', 'rtl');
+          codeEl.setAttribute('dir', 'rtl');
+        }
       }
     }
     pre.dataset.rtlxDone = '1';
@@ -310,13 +372,16 @@ function fixContainer(container) {
     }
   }
 
-  // 2. Fix code blocks
+  // 2. Fix KaTeX/LaTeX — must run AFTER block RTL so we can override
+  fixKaTeXInContainer(container);
+
+  // 3. Fix code blocks
   fixCodeBlocks(container);
 
-  // 3. Fix Mermaid SVG diagrams
+  // 4. Fix Mermaid SVG diagrams
   fixMermaidDiagrams(container);
 
-  // 4. Fix inline elements (optional pass for deep RTL spans)
+  // 5. Fix inline elements (optional pass for deep RTL spans)
   // Disabled by default to avoid perf overhead on large responses;
   // the block-level pass covers most cases. Uncomment if needed:
   // fixInlineRTL(container);

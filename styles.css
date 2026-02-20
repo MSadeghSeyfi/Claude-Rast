@@ -117,3 +117,31 @@ footer * {
   direction: ltr;
   unicode-bidi: isolate;
 }
+
+/* ── 11. KaTeX / LaTeX formulas — always LTR ── */
+/* Math notation is universally LTR. When a parent block is RTL,
+   the KaTeX rendered HTML must remain LTR to avoid mirrored subscripts,
+   misplaced operators, and broken layout. */
+[data-message-author-role="assistant"] [dir="rtl"] .katex,
+.font-claude-message [dir="rtl"] .katex,
+[data-message-author-role="assistant"] .rtlx-block .katex,
+.font-claude-message .rtlx-block .katex {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-block !important;
+  text-align: left !important;
+}
+
+/* Keep all KaTeX internals strictly LTR */
+[data-message-author-role="assistant"] [dir="rtl"] .katex-html,
+[data-message-author-role="assistant"] [dir="rtl"] .katex-mathml,
+.font-claude-message [dir="rtl"] .katex-html,
+.font-claude-message [dir="rtl"] .katex-mathml,
+[data-message-author-role="assistant"] .rtlx-block .katex-html,
+[data-message-author-role="assistant"] .rtlx-block .katex-mathml,
+.font-claude-message .rtlx-block .katex-html,
+.font-claude-message .rtlx-block .katex-mathml {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  text-align: left !important;
+}
