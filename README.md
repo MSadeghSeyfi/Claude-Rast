@@ -46,18 +46,27 @@ Claude.ai renders **all** responses in LTR (Left-to-Right). If you chat in Persi
 
 ## Installation
 
-### From Source (Developer Mode)
+### Step 1 — Download
 
-1. **Clone** this repository:
-   ```bash
-   git clone https://github.com/MSadeghSeyfi/claude-rast.git
-   ```
-2. Open **Chrome** and go to `chrome://extensions/`
-3. Enable **Developer mode** (top-right toggle)
-4. Click **Load unpacked** and select the cloned folder
-5. Open [claude.ai](https://claude.ai) — RTL text now renders correctly
+Go to the [**Releases**](../../releases/latest) page and download the latest **`claude-rtl-fix-v*.zip`** file.
 
-> **Tip:** The extension also works on **Edge**, **Brave**, **Arc**, and any Chromium-based browser.
+### Step 2 — Extract
+
+Extract (unzip) the downloaded file to a folder on your computer. Remember where you saved it.
+
+### Step 3 — Install in Chrome
+
+1. Open **Chrome** and type `chrome://extensions/` in the address bar
+2. Enable **Developer mode** using the toggle in the top-right corner
+3. Click **Load unpacked**
+4. Select the folder you extracted in Step 2
+5. Done! Navigate to [claude.ai](https://claude.ai) and enjoy proper RTL rendering
+
+> **Tip:** This also works on **Edge** (`edge://extensions/`), **Brave** (`brave://extensions/`), **Arc**, **Opera**, and any Chromium-based browser.
+
+### Updating
+
+To update, download the new version from [Releases](../../releases/latest), extract it to the **same folder** (overwrite), then click the refresh icon on `chrome://extensions/`.
 
 ## How It Works
 
@@ -72,20 +81,6 @@ The extension injects a content script and stylesheet into Claude.ai. A `Mutatio
 6. KaTeX Guard    → Force .katex elements to dir=ltr
 7. Code Blocks    → Full RTL for text blocks, per-line BiDi for code
 8. Mermaid Fix    → Handle RTL in SVG <text> and <foreignObject>
-```
-
-## Project Structure
-
-```
-claude-rast/
-├── manifest.json       # Chrome Extension Manifest V3
-├── content.js          # Core logic — RTL detection, BiDi fixes, KaTeX guard
-├── styles.css          # Injected CSS — RTL layout rules
-├── background.js       # Service worker — default enabled state
-├── popup.html          # Extension popup UI (dark theme, RTL)
-├── popup.js            # Popup toggle logic
-├── icons/              # Extension icons (16, 32, 48, 128px)
-└── img/                # README assets
 ```
 
 ## Compatibility
