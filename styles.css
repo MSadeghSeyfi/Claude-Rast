@@ -21,12 +21,22 @@
   unicode-bidi: isolate;
 }
 
-/* ── 3. RTL Code Blocks — keep layout intact, fix per-line BiDi only ── */
-/* The pre container stays as-is (no forced direction or alignment).
-   Only the inner code element gets plaintext BiDi so each line
-   auto-detects its direction from its first strong character. */
-[data-message-author-role="assistant"] pre.rtlx-code-block code,
-.font-claude-message pre.rtlx-code-block code {
+/* ── 3a. Text/pseudocode blocks (no language class) — full RTL ── */
+/* Persian pseudocode, explanations, etc. get full RTL treatment
+   so BiDi algorithm correctly places English words within RTL flow. */
+[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="text"],
+[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="text"] code,
+.font-claude-message pre.rtlx-code-block[data-rtlx-type="text"],
+.font-claude-message pre.rtlx-code-block[data-rtlx-type="text"] code {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* ── 3b. Actual code blocks (has language-* class) — per-line BiDi ── */
+/* Real code stays LTR; only lines starting with Persian auto-detect RTL.
+   This handles Persian comments in Python/JS/etc. */
+[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="code"] code,
+.font-claude-message pre.rtlx-code-block[data-rtlx-type="code"] code {
   unicode-bidi: plaintext;
 }
 

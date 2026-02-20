@@ -219,16 +219,25 @@ function fixArrowsInElement(el) {
 }
 
 // ─── Fix: Code Blocks containing RTL text ────────────────────────────────
+// Two strategies based on block type:
+// 1. "text" blocks (no language-* class): full RTL — direction: rtl, text-align: right
+//    These are pseudocode, explanations, etc. written in Persian.
+// 2. "code" blocks (has language-* class): per-line BiDi via unicode-bidi: plaintext
+//    These are actual code (Python, JS, etc.) where only comments may be Persian.
 function fixCodeBlocks(container) {
   container.querySelectorAll('pre').forEach(pre => {
     if (pre.dataset.rtlxDone === '1') return;
     const text = pre.textContent || '';
     if (hasRTLChars(text)) {
       pre.classList.add('rtlx-code-block');
-      // Apply plaintext direction on the code element for per-line BiDi
-      pre.querySelectorAll('code').forEach(code => {
-        code.classList.add('rtlx-code-block');
-      });
+
+      const codeEl = pre.querySelector('code');
+      if (codeEl) {
+        codeEl.classList.add('rtlx-code-block');
+        // Detect if this is actual code or plain text
+        const isActualCode = /\blanguage-\w+/.test(codeEl.className || '');
+        pre.dataset.rtlxType = isActualCode ? 'code' : 'text';
+      }
     }
     pre.dataset.rtlxDone = '1';
   });
