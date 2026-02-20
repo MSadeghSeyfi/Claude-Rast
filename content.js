@@ -53,6 +53,13 @@ let isRunning = false;
 let debounceTimer = null;
 let observer = null;
 
+// Unicode BiDi control characters
+const RLM = '\u200F'; // Right-to-Left Mark
+const LRM = '\u200E'; // Left-to-Right Mark
+const RLI = '\u2067'; // Right-to-Left Isolate
+const LRI = '\u2066'; // Left-to-Right Isolate
+const PDI = '\u2069'; // Pop Directional Isolate
+
 // ─── Utility: Check if text contains RTL characters ───────────────────────
 function hasRTLChars(text) {
   return RTL_REGEX.test(text);
@@ -85,6 +92,69 @@ function getResponseContainers() {
   return [...found];
 }
 
+// ─── Fix: Inject BiDi control chars into text nodes for correct ordering ──
+// In RTL context, numbers and LTR words get misplaced by the BiDi algorithm.
+// We use Unicode Isolate characters (LRI/RLI/PDI) to wrap segments and
+// RLM/LRM marks to anchor numbers in the correct visual position.
+function fixBiDiInTextNode(textNode) {
+  const text = textNode.nodeValue;
+  if (!text) return;
+  // Skip if already processed (contains isolate chars)
+  if (text.indexOf(LRI) !== -1 || text.indexOf(RLI) !== -1) return;
+  // Only process nodes that mix RTL and non-RTL content
+  if (!hasRTLChars(text)) return;
+  if (!/[A-Za-z0-9]/.test(text)) return;
+
+  let result = text;
+
+  // Step 1: Wrap contiguous English word sequences in LRI...PDI isolates.
+  // This handles "Dumbbell Goblet Squat", "Plank", "Sigmoid", etc.
+  // Match: one or more Latin words (with possible numbers/hyphens within)
+  result = result.replace(
+    /[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
+    match => LRI + match + PDI
+  );
+
+  // Step 2: Wrap number+operator groups in LRI...PDI isolates.
+  // This handles "3 × 30", "3 × 12", "0.92", "25/100" etc.
+  // These are numeric expressions with operators/symbols between digits.
+  result = result.replace(
+    /\d[\d\s×x*.\-+/()%=,]*\d[\d.]*/g,
+    match => LRI + match + PDI
+  );
+
+  // Step 3: Handle standalone single numbers adjacent to RTL text
+  // (e.g., "3 ست" → wrap "3" in isolate so it stays on the correct side)
+  result = result.replace(
+    /(?<![.\d\u2066])(\d+)(?![.\d\u2069])/g,
+    LRI + '$1' + PDI
+  );
+
+  if (result !== text) {
+    textNode.nodeValue = result;
+  }
+}
+
+// ─── Fix: Walk text nodes in an RTL element and fix BiDi ordering ─────────
+function fixBiDiInElement(el) {
+  const walker = document.createTreeWalker(
+    el,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (hasCodeAncestor(node)) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    }
+  );
+
+  const textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
+  for (const node of textNodes) {
+    fixBiDiInTextNode(node);
+  }
+}
+
 // ─── Fix: Apply RTL to a block element ────────────────────────────────────
 function applyRTLToBlock(el) {
   if (el.dataset.rtlxDone === '1') return; // already processed stably
@@ -94,6 +164,7 @@ function applyRTLToBlock(el) {
   if (isRTLDominant(text)) {
     el.setAttribute('dir', 'rtl');
     el.classList.add('rtlx-block');
+    fixBiDiInElement(el);
     fixArrowsInElement(el);
   }
   // Mark as processed so we don't re-check on every mutation
@@ -137,6 +208,10 @@ function fixCodeBlocks(container) {
     const text = pre.textContent || '';
     if (hasRTLChars(text)) {
       pre.classList.add('rtlx-code-block');
+      // Apply plaintext direction on the code element for per-line BiDi
+      pre.querySelectorAll('code').forEach(code => {
+        code.classList.add('rtlx-code-block');
+      });
     }
     pre.dataset.rtlxDone = '1';
   });

@@ -11,14 +11,14 @@
 .font-claude-message [dir="rtl"] {
   direction: rtl !important;
   text-align: right !important;
-  unicode-bidi: plaintext;
+  unicode-bidi: isolate;
 }
 
 /* ── 2. RTL Inline Elements ── */
 [data-message-author-role="assistant"] .rtlx-inline,
 .font-claude-message .rtlx-inline {
   direction: rtl;
-  unicode-bidi: plaintext;
+  unicode-bidi: isolate;
 }
 
 /* ── 3. RTL Code Blocks — for Persian/Arabic text in <pre><code> ── */
@@ -26,6 +26,13 @@
 .font-claude-message pre.rtlx-code-block {
   direction: rtl !important;
   text-align: right !important;
+  unicode-bidi: isolate;
+}
+
+/* ── 3b. Code inside RTL code blocks — per-line direction via plaintext ── */
+[data-message-author-role="assistant"] pre.rtlx-code-block code,
+.font-claude-message pre.rtlx-code-block code {
+  direction: rtl;
   unicode-bidi: plaintext;
 }
 
@@ -104,6 +111,5 @@ footer * {
 [data-message-author-role="assistant"] [dir="rtl"] code:not(.rtlx-code-block),
 .font-claude-message [dir="rtl"] code:not(.rtlx-code-block) {
   direction: ltr;
-  unicode-bidi: embed;
-  display: inline-block;
+  unicode-bidi: isolate;
 }
