@@ -114,10 +114,28 @@ function getResponseContainers() {
   return [...found];
 }
 
+// ─── Utility: Wrap regex matches only if NOT inside an existing LRI…PDI ───
+// Prevents nested isolates which break the BiDi algorithm.
+function wrapOutsideIsolates(str, regex, wrapFn) {
+  return str.replace(regex, function () {
+    const match = arguments[0];
+    const offset = arguments[arguments.length - 2];
+    // Check if this position is inside an unclosed LRI isolate
+    const before = str.substring(0, offset);
+    const lastLRI = before.lastIndexOf(LRI);
+    const lastPDI = before.lastIndexOf(PDI);
+    if (lastLRI !== -1 && lastLRI > lastPDI) return match; // inside isolate → skip
+    return wrapFn(match);
+  });
+}
+
 // ─── Fix: Inject BiDi control chars into text nodes for correct ordering ──
 // In RTL context, numbers and LTR words get misplaced by the BiDi algorithm.
 // We use Unicode Isolate characters (LRI/RLI/PDI) to wrap segments and
 // RLM/LRM marks to anchor numbers in the correct visual position.
+//
+// Step order matters — multi-digit decimals (0.5) must be wrapped BEFORE
+// operator+number (=0.5) to avoid nested isolates like ⁦=⁦0.5⁩⁩.
 function fixBiDiInTextNode(textNode) {
   const text = textNode.nodeValue;
   if (!text) return;
@@ -125,7 +143,7 @@ function fixBiDiInTextNode(textNode) {
   if (text.indexOf(LRI) !== -1 || text.indexOf(RLI) !== -1) return;
   // Only process nodes that mix RTL and non-RTL content
   if (!hasRTLChars(text)) return;
-  if (!/[A-Za-z0-9]/.test(text)) return;
+  if (!/[A-Za-z0-9\u0370-\u03FF]/.test(text)) return;
 
   let result = text;
 
@@ -137,27 +155,38 @@ function fixBiDiInTextNode(textNode) {
     match => LRI + match + PDI
   );
 
-  // Step 2: Wrap math operator + number groups in LRI...PDI isolates.
-  // This handles "= 1", "≥ 0", "≤ 100", "= 0.5" etc.
-  // The operator must stay visually adjacent to its number in RTL context.
+  // Step 1.5: Wrap Greek letter + operator + number as a single unit.
+  // This handles "α=1", "β=0.5", "ρ=0.1", "σ=2" etc.
+  // Greek letters (U+0370–U+03FF) are LTR but not caught by Step 1.
+  // Without this, bare "α" between isolates creates a continuous LTR run
+  // that swallows commas and breaks RTL ordering of parameter lists.
   result = result.replace(
-    /[=<>≤≥≠≈+\-×÷]\s*\d[\d.]*/g,
+    /[\u0370-\u03FF]\s*[=<>≤≥≠≈+\-×÷]\s*\d[\d.]*/g,
     match => LRI + match + PDI
   );
 
-  // Step 3: Wrap number+operator groups in LRI...PDI isolates.
-  // This handles "3 × 30", "3 × 12", "0.92", "25/100" etc.
-  // These are numeric expressions with operators/symbols between digits.
-  result = result.replace(
-    /(?<!\u2069)\d[\d\s×x*.\-+/()%=,]*\d[\d.]*/g,
+  // Step 2: Wrap multi-digit number expressions in LRI...PDI isolates.
+  // This handles "3 × 30", "0.5", "0.92", "25/100" etc.
+  // Must run BEFORE operator+number so "=0.5" doesn't create nested isolates.
+  result = wrapOutsideIsolates(result,
+    /\d[\d\s×x*.\-+/()%=,]*\d[\d.]*/g,
+    match => LRI + match + PDI
+  );
+
+  // Step 3: Wrap math operator + number groups in LRI...PDI isolates.
+  // This handles "= 1", "≥ 0", "≤ 100" etc.
+  // After steps 1.5/2, "α=1" and "=⁦0.5⁩" are already wrapped,
+  // so only genuinely unwrapped operator+number pairs are caught.
+  result = wrapOutsideIsolates(result,
+    /[=<>≤≥≠≈+\-×÷]\s*\d[\d.]*/g,
     match => LRI + match + PDI
   );
 
   // Step 4: Handle standalone single numbers adjacent to RTL text
   // (e.g., "3 ست" → wrap "3" in isolate so it stays on the correct side)
-  result = result.replace(
-    /(?<![.\d\u2066\u2069])(\d+)(?![.\d\u2069])/g,
-    LRI + '$1' + PDI
+  result = wrapOutsideIsolates(result,
+    /(?<![.\d])\d+(?![.\d])/g,
+    match => LRI + match + PDI
   );
 
   if (result !== text) {
