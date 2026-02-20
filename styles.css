@@ -21,18 +21,12 @@
   unicode-bidi: isolate;
 }
 
-/* ── 3. RTL Code Blocks — for Persian/Arabic text in <pre><code> ── */
-[data-message-author-role="assistant"] pre.rtlx-code-block,
-.font-claude-message pre.rtlx-code-block {
-  direction: rtl !important;
-  text-align: right !important;
-  unicode-bidi: isolate;
-}
-
-/* ── 3b. Code inside RTL code blocks — per-line direction via plaintext ── */
+/* ── 3. RTL Code Blocks — keep layout intact, fix per-line BiDi only ── */
+/* The pre container stays as-is (no forced direction or alignment).
+   Only the inner code element gets plaintext BiDi so each line
+   auto-detects its direction from its first strong character. */
 [data-message-author-role="assistant"] pre.rtlx-code-block code,
 .font-claude-message pre.rtlx-code-block code {
-  direction: rtl;
   unicode-bidi: plaintext;
 }
 

@@ -66,11 +66,28 @@ function hasRTLChars(text) {
 }
 
 // ─── Utility: Check if RTL characters dominate the text ───────────────────
+// Checks the whole text first, then checks each line individually.
+// This handles elements like "<strong>Dumbbell Shoulder Press</strong>\n3 ست × 10 تکرار"
+// where the long English name dominates overall, but the second line is clearly RTL.
 function isRTLDominant(text) {
-  const stripped = text.replace(/[\s\d\p{P}]/gu, '');
+  const stripRegex = /[\s\d\p{P}\p{S}]/gu; // strip whitespace, digits, punctuation, symbols (×, =, etc.)
+  const rtlSourceRegex = new RegExp(RTL_REGEX.source, 'g');
+
+  // Check whole text
+  const stripped = text.replace(stripRegex, '');
   if (!stripped.length) return false;
-  const rtlChars = (stripped.match(new RegExp(RTL_REGEX.source, 'g')) || []).length;
-  return (rtlChars / stripped.length) >= 0.25; // 25%+ RTL chars → RTL element
+  const rtlChars = (stripped.match(rtlSourceRegex) || []).length;
+  if ((rtlChars / stripped.length) >= 0.25) return true;
+
+  // Per-line check: if any line is RTL-dominant, the whole element should be RTL
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const lineStripped = line.replace(stripRegex, '');
+    if (!lineStripped.length) continue;
+    const lineRtl = (lineStripped.match(new RegExp(RTL_REGEX.source, 'g')) || []).length;
+    if ((lineRtl / lineStripped.length) >= 0.25) return true;
+  }
+  return false;
 }
 
 // ─── Utility: Check if an element has a CODE/PRE ancestor ─────────────────
