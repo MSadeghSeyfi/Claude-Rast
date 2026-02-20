@@ -11,24 +11,22 @@
 .font-claude-message [dir="rtl"] {
   direction: rtl !important;
   text-align: right !important;
-  unicode-bidi: embed;
+  unicode-bidi: plaintext;
 }
 
 /* ── 2. RTL Inline Elements ── */
 [data-message-author-role="assistant"] .rtlx-inline,
 .font-claude-message .rtlx-inline {
   direction: rtl;
-  unicode-bidi: embed;
+  unicode-bidi: plaintext;
 }
 
 /* ── 3. RTL Code Blocks — for Persian/Arabic text in <pre><code> ── */
 [data-message-author-role="assistant"] pre.rtlx-code-block,
-[data-message-author-role="assistant"] pre.rtlx-code-block code,
-.font-claude-message pre.rtlx-code-block,
-.font-claude-message pre.rtlx-code-block code {
+.font-claude-message pre.rtlx-code-block {
   direction: rtl !important;
   text-align: right !important;
-  unicode-bidi: embed;
+  unicode-bidi: plaintext;
 }
 
 /* ── 4. RTL List items ── */

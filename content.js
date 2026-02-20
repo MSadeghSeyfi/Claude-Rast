@@ -137,10 +137,6 @@ function fixCodeBlocks(container) {
     const text = pre.textContent || '';
     if (hasRTLChars(text)) {
       pre.classList.add('rtlx-code-block');
-      // Also mark inner code element
-      pre.querySelectorAll('code').forEach(code => {
-        code.classList.add('rtlx-code-block');
-      });
     }
     pre.dataset.rtlxDone = '1';
   });
