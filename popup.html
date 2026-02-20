@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude RTL Fix</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 260px;
+      background: #1a1a2e;
+      color: #e8e8f0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 14px;
+      direction: rtl;
+      user-select: none;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+    }
+
+    .header-icon {
+      font-size: 22px;
+      line-height: 1;
+    }
+
+    .header-text {
+      flex: 1;
+    }
+
+    .header-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #e8e8f0;
+      letter-spacing: 0.3px;
+    }
+
+    .header-subtitle {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      margin-top: 2px;
+    }
+
+    /* ── Main Toggle Area ── */
+    .toggle-area {
+      padding: 18px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: background 0.15s;
+      border-radius: 0;
+    }
+
+    .toggle-area:hover {
+      background: rgba(255,255,255,0.04);
+    }
+
+    .toggle-label {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .toggle-label-main {
+      font-size: 14px;
+      font-weight: 500;
+      color: #e8e8f0;
+    }
+
+    .toggle-label-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+    }
+
+    /* ── Toggle Switch ── */
+    .switch {
+      position: relative;
+      width: 46px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .slider {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.15);
+      border-radius: 26px;
+      cursor: pointer;
+      transition: background 0.25s;
+    }
+
+    .slider::before {
+      content: '';
+      position: absolute;
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: transform 0.25s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+
+    input:checked + .slider {
+      background: #5865f2;
+    }
+
+    input:checked + .slider::before {
+      transform: translateX(20px);
+    }
+
+    /* ── Status Badge ── */
+    .status-bar {
+      padding: 8px 16px 14px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      transition: all 0.25s;
+    }
+
+    .status-badge.on {
+      background: rgba(52, 211, 153, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(52, 211, 153, 0.25);
+    }
+
+    .status-badge.off {
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.35);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 10px 16px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.25);
+      text-align: center;
+      direction: ltr;
+    }
+
+    /* ── Reload notice ── */
+    .reload-notice {
+      display: none;
+      padding: 8px 16px;
+      background: rgba(88, 101, 242, 0.1);
+      border-top: 1px solid rgba(88, 101, 242, 0.2);
+      font-size: 11px;
+      color: rgba(180, 185, 255, 0.8);
+      text-align: center;
+    }
+
+    .reload-notice.visible {
+      display: block;
+    }
+
+    .reload-btn {
+      background: none;
+      border: 1px solid rgba(88, 101, 242, 0.5);
+      color: #8b96ff;
+      padding: 3px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-top: 5px;
+      display: inline-block;
+      transition: background 0.15s;
+    }
+
+    .reload-btn:hover {
+      background: rgba(88, 101, 242, 0.15);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">⟵</div>
+    <div class="header-text">
+      <div class="header-title">Claude RTL Fix</div>
+      <div class="header-subtitle">پشتیبانی کامل از متون راست‌به‌چپ</div>
+    </div>
+  </div>
+
+  <label class="toggle-area" for="toggle">
+    <div class="toggle-label">
+      <div class="toggle-label-main">پشتیبانی RTL</div>
+      <div class="toggle-label-sub">فارسی، عربی، عبری</div>
+    </div>
+    <div class="switch">
+      <input type="checkbox" id="toggle" />
+      <span class="slider"></span>
+    </div>
+  </label>
+
+  <div class="status-bar">
+    <div class="status-badge" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">فعال</span>
+    </div>
+  </div>
+
+  <div class="reload-notice" id="reloadNotice">
+    برای اعمال تغییرات صفحه را رفرش کنید
+    <br />
+    <button class="reload-btn" id="reloadBtn">↺ رفرش صفحه</button>
+  </div>
+
+  <div class="footer">Claude RTL Fix v1.0.0</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

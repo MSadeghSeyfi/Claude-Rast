@@ -1,0 +1,111 @@
+/* ============================================================
+   Claude RTL Fix — Injected Stylesheet
+   Scoped strictly to Claude.ai's assistant response content.
+   Does NOT affect any page UI (nav, sidebar, inputs, buttons).
+   ============================================================ */
+
+/* ── 1. RTL Block Elements (paragraphs, headings, lists, etc.) ── */
+[data-message-author-role="assistant"] .rtlx-block,
+[data-message-author-role="assistant"] [dir="rtl"],
+.font-claude-message .rtlx-block,
+.font-claude-message [dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: embed;
+}
+
+/* ── 2. RTL Inline Elements ── */
+[data-message-author-role="assistant"] .rtlx-inline,
+.font-claude-message .rtlx-inline {
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* ── 3. RTL Code Blocks — for Persian/Arabic text in <pre><code> ── */
+[data-message-author-role="assistant"] pre.rtlx-code-block,
+[data-message-author-role="assistant"] pre.rtlx-code-block code,
+.font-claude-message pre.rtlx-code-block,
+.font-claude-message pre.rtlx-code-block code {
+  direction: rtl !important;
+  text-align: right !important;
+  unicode-bidi: embed;
+}
+
+/* ── 4. RTL List items ── */
+[data-message-author-role="assistant"] ul[dir="rtl"],
+[data-message-author-role="assistant"] ol[dir="rtl"],
+[data-message-author-role="assistant"] ul .rtlx-block,
+[data-message-author-role="assistant"] ol .rtlx-block,
+.font-claude-message ul[dir="rtl"],
+.font-claude-message ol[dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+  padding-right: 1.5em;
+  padding-left: 0;
+}
+
+[data-message-author-role="assistant"] li[dir="rtl"],
+[data-message-author-role="assistant"] li.rtlx-block,
+.font-claude-message li[dir="rtl"],
+.font-claude-message li.rtlx-block {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* ── 5. RTL Blockquotes ── */
+[data-message-author-role="assistant"] blockquote[dir="rtl"],
+[data-message-author-role="assistant"] blockquote.rtlx-block,
+.font-claude-message blockquote[dir="rtl"],
+.font-claude-message blockquote.rtlx-block {
+  direction: rtl !important;
+  text-align: right !important;
+  border-right: 4px solid currentColor;
+  border-left: none;
+  padding-right: 1em;
+  padding-left: 0;
+}
+
+/* ── 6. RTL Table Cells ── */
+[data-message-author-role="assistant"] td[dir="rtl"],
+[data-message-author-role="assistant"] th[dir="rtl"],
+.font-claude-message td[dir="rtl"],
+.font-claude-message th[dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* ── 7. Mermaid SVG — RTL text nodes ── */
+[data-message-author-role="assistant"] svg text[data-rtlx="1"],
+[data-message-author-role="assistant"] svg tspan[data-rtlx="1"],
+.font-claude-message svg text[data-rtlx="1"],
+.font-claude-message svg tspan[data-rtlx="1"] {
+  direction: rtl;
+  unicode-bidi: embed;
+}
+
+/* ── 8. ForeignObject inside Mermaid SVG (HTML-in-SVG) ── */
+[data-message-author-role="assistant"] svg foreignObject [dir="rtl"],
+.font-claude-message svg foreignObject [dir="rtl"] {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* ── 9. Safety guard: never apply RTL to UI chrome ── */
+nav *,
+header *,
+[data-testid="sidebar"] *,
+[data-testid="composer"] *,
+.ProseMirror *,
+footer * {
+  /* Explicitly un-inherit RTL direction so the above rules
+     cannot accidentally bleed into UI elements */
+}
+
+/* ── 10. Mixed-direction helpers ── */
+/* When a paragraph is RTL but contains LTR code/numbers inline */
+[data-message-author-role="assistant"] [dir="rtl"] code:not(.rtlx-code-block),
+.font-claude-message [dir="rtl"] code:not(.rtlx-code-block) {
+  direction: ltr;
+  unicode-bidi: embed;
+  display: inline-block;
+}
