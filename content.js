@@ -32,11 +32,15 @@ const ARROW_REGEX = new RegExp(
 // ─── Selectors for Claude.ai Response Content ONLY ────────────────────────
 // Multiple selectors for robustness across Claude.ai DOM changes.
 // These all target the assistant message content, never the page UI.
+// claude.ai/code uses epitaxy-* classes; classic claude.ai uses the others.
 const RESPONSE_SELECTORS = [
   '[data-message-author-role="assistant"]',
   '.font-claude-message',
   '[data-is-streaming]',
   '.message-content',
+  // claude.ai/code (Epitaxy UI)
+  '.epitaxy-markdown',
+  '[data-epitaxy-entry]',
 ];
 
 // Block-level elements within responses to check for RTL
@@ -420,10 +424,17 @@ function fixContainer(container) {
 // Makes the input box RTL so Persian text is typed right-to-left.
 // Uses dir="auto" on inner <p> elements so each paragraph auto-detects
 // its direction (Persian → RTL, English → LTR).
+// Covers both classic claude.ai and claude.ai/code (Epitaxy UI).
 function fixChatInput() {
-  document.querySelectorAll('[data-testid="chat-input"].ProseMirror').forEach(input => {
+  document.querySelectorAll(
+    '[data-testid="chat-input"].ProseMirror, .ProseMirror[contenteditable="true"]'
+  ).forEach(input => {
     if (input.dataset.rtlxDone === '1') return;
     input.setAttribute('dir', 'rtl');
+    // Per-paragraph auto-detection for mixed RTL/LTR typing
+    input.querySelectorAll('p').forEach(p => {
+      if (!p.dataset.rtlxDone) p.setAttribute('dir', 'auto');
+    });
     input.dataset.rtlxDone = '1';
   });
 }
