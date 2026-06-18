@@ -41,6 +41,9 @@ const RESPONSE_SELECTORS = [
   // claude.ai/code (Epitaxy UI)
   '.epitaxy-markdown',
   '[data-epitaxy-entry]',
+  // claude.ai/design (Cowork/Design UI) — styled-components hash classes
+  // are unstable, so we anchor on the stable data-testid container instead.
+  '[data-testid="chat-messages"]',
 ];
 
 // Block-level elements within responses to check for RTL
@@ -145,17 +148,27 @@ function fixBiDiInTextNode(textNode) {
   if (!text) return;
   // Skip if already processed (contains isolate chars)
   if (text.indexOf(LRI) !== -1 || text.indexOf(RLI) !== -1) return;
-  // Only process nodes that mix RTL and non-RTL content
-  if (!hasRTLChars(text)) return;
+
+  // This function only runs on text nodes inside a block we already marked
+  // dir="rtl". A text node with NO RTL characters (e.g. a pure-English
+  // suggestion chip like "Explain like I'm 5") still needs isolating \u2014
+  // otherwise a trailing/standalone digit gets visually relocated by the
+  // browser's native BiDi algorithm under the RTL paragraph context.
+  if (!hasRTLChars(text)) {
+    if (text.trim() && /[A-Za-z0-9]/.test(text)) {
+      textNode.nodeValue = LRI + text + PDI;
+    }
+    return;
+  }
   if (!/[A-Za-z0-9\u0370-\u03FF]/.test(text)) return;
 
   let result = text;
 
   // Step 1: Wrap contiguous English word sequences in LRI...PDI isolates.
-  // This handles "Dumbbell Goblet Squat", "Plank", "Sigmoid", etc.
-  // Match: one or more Latin words (with possible numbers/hyphens within)
+  // Optionally captures a leading integer so "2 GB", "16 MB", "2GB" stay as
+  // a single LTR unit instead of two separate isolates that swap in RTL flow.
   result = result.replace(
-    /[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
+    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
     match => LRI + match + PDI
   );
 
@@ -414,10 +427,10 @@ function fixContainer(container) {
   // 4. Fix Mermaid SVG diagrams
   fixMermaidDiagrams(container);
 
-  // 5. Fix inline elements (optional pass for deep RTL spans)
-  // Disabled by default to avoid perf overhead on large responses;
-  // the block-level pass covers most cases. Uncomment if needed:
-  // fixInlineRTL(container);
+  // 5. Fix inline elements (spans without a block wrapper).
+  // Needed for claude.ai/design, which renders user messages as bare
+  // <span> text instead of <p>/<li> — the block-level pass alone misses them.
+  fixInlineRTL(container);
 }
 
 // ─── Fix: Chat input field — set RTL direction ───────────────────────────
