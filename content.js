@@ -83,7 +83,7 @@ function hasRTLChars(text) {
 // Checks the whole text first, then checks each line individually.
 // This handles elements like "<strong>Dumbbell Shoulder Press</strong>\n3 ست × 10 تکرار"
 // where the long English name dominates overall, but the second line is clearly RTL.
-function isRTLDominant(text) {
+function isRTLDominant(text, threshold = 0.25) {
   const stripRegex = /[\s\d\p{P}\p{S}]/gu; // strip whitespace, digits, punctuation, symbols (×, =, etc.)
   const rtlSourceRegex = new RegExp(RTL_REGEX.source, 'g');
 
@@ -91,7 +91,7 @@ function isRTLDominant(text) {
   const stripped = text.replace(stripRegex, '');
   if (!stripped.length) return false;
   const rtlChars = (stripped.match(rtlSourceRegex) || []).length;
-  if ((rtlChars / stripped.length) >= 0.25) return true;
+  if ((rtlChars / stripped.length) >= threshold) return true;
 
   // Per-line check: if any line is RTL-dominant, the whole element should be RTL
   const lines = text.split('\n');
@@ -99,9 +99,27 @@ function isRTLDominant(text) {
     const lineStripped = line.replace(stripRegex, '');
     if (!lineStripped.length) continue;
     const lineRtl = (lineStripped.match(new RegExp(RTL_REGEX.source, 'g')) || []).length;
-    if ((lineRtl / lineStripped.length) >= 0.25) return true;
+    if ((lineRtl / lineStripped.length) >= threshold) return true;
   }
   return false;
+}
+
+// ─── Utility: Get an element's text, excluding <code> descendants ─────────
+// Inline code identifiers (chrome.alarms, chrome.storage, ...) are
+// language-agnostic technical labels, not prose — counting their (often
+// long, all-Latin) characters toward the RTL ratio is what makes a
+// fundamentally Persian sentence like "‹English term› + ‹code› برای X"
+// register as LTR-dominant and get skipped entirely.
+function textExcludingCode(el) {
+  let result = '';
+  el.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      result += node.nodeValue;
+    } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'CODE') {
+      result += textExcludingCode(node);
+    }
+  });
+  return result;
 }
 
 // ─── Utility: Check if an element has a CODE/PRE/KaTeX ancestor ───────────
@@ -236,12 +254,23 @@ function fixBiDiInElement(el) {
 }
 
 // ─── Fix: Apply RTL to a block element ────────────────────────────────────
+// Prose blocks (paragraphs, list items, headings) often read as Persian
+// sentences with embedded English/code technical terms — e.g. "background
+// service worker + chrome.alarms برای polling دوره‌ای endpoint". By raw
+// character count the English/code terms dominate, but it's still
+// fundamentally a Persian line and needs dir="rtl". So we judge dominance
+// on the prose text alone (code identifiers excluded) with a lower
+// threshold — much more lenient than the 25% used elsewhere, since a
+// couple of short Persian connector words among long English terms is
+// still a strong RTL signal in this context.
+const BLOCK_RTL_THRESHOLD = 0.12;
+
 function applyRTLToBlock(el) {
   if (el.dataset.rtlxDone === '1') return; // already processed stably
   const text = el.textContent || '';
   if (!text.trim()) return;
 
-  if (isRTLDominant(text)) {
+  if (isRTLDominant(textExcludingCode(el), BLOCK_RTL_THRESHOLD)) {
     el.setAttribute('dir', 'rtl');
     el.classList.add('rtlx-block');
     fixBiDiInElement(el);
