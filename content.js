@@ -41,6 +41,8 @@ const RESPONSE_SELECTORS = [
   // claude.ai/code (Epitaxy UI)
   '.epitaxy-markdown',
   '[data-epitaxy-entry]',
+  // claude.ai/code interactive "approval"/question cards (options + prompt)
+  '.epitaxy-approval-card',
   // claude.ai/design (Cowork/Design UI) — styled-components hash classes
   // are unstable, so we anchor on the stable data-testid container instead.
   '[data-testid="chat-messages"]',
@@ -182,9 +184,19 @@ function fixBiDiInTextNode(textNode) {
     }
     return;
   }
-  if (!/[A-Za-z0-9\u0370-\u03FF]/.test(text)) return;
+  if (!/[A-Za-z0-9$\u0370-\u03FF]/.test(text)) return;
 
   let result = text;
+
+  // Step 0: Wrap raw LaTeX/math delimited by $$\u2026$$ or $\u2026$ in a single LTR
+  // isolate. In claude.ai/code these often arrive as plain text (not yet
+  // rendered to KaTeX), e.g. "$P_{Q_3}={75}$" \u2014 without isolation the RTL
+  // flow shuffles the $, subscripts, braces and digits into nonsense like
+  // "$P_$Q_3={75}$P_". Treat the whole expression (delimiters included) as
+  // one LTR run so it stays readable. Run FIRST so later number/word steps
+  // don't carve it into pieces.  $$ before $ to avoid half-matching.
+  result = result.replace(/\$\$[^$]+?\$\$/g, m => LRI + m + PDI);
+  result = wrapOutsideIsolates(result, /\$[^$\n]+?\$/g, m => LRI + m + PDI);
 
   // Step 1: Wrap contiguous English word sequences in LRI...PDI isolates.
   // Optionally captures a leading integer so "2 GB", "16 MB", "2GB" stay as
@@ -419,20 +431,36 @@ function fixMermaidDiagrams(container) {
   });
 }
 
-// ─── Fix: Inline elements (spans, strong, em) that are purely RTL ─────────
+// ─── Fix: Inline / leaf-text elements that are purely RTL ─────────────────
+// Selectors used outside BLOCK_ELEMENTS that may still hold standalone RTL
+// prose: spans (Claude often wraps words in bare spans) and *leaf* divs.
+// Leaf div = a div whose subtree has no further layout/interactive children
+// (div/button/ul/ol/table/textarea/input/svg). claude.ai/code's interactive
+// cards render their question + option titles/descriptions as such leaf
+// divs (e.g. <div class="text-body">فقط ۴ مبحث پایانی</div>), which the
+// block-level pass misses entirely.
 function fixInlineRTL(container) {
-  // Handle cases where Claude wraps RTL words in spans without dir attribute
-  const inlines = container.querySelectorAll(
-    'span:not([data-rtlx-done]), strong:not([data-rtlx-done]), em:not([data-rtlx-done])'
+  const candidates = container.querySelectorAll(
+    'span:not([data-rtlx-done]), strong:not([data-rtlx-done]), ' +
+    'em:not([data-rtlx-done]), div:not([data-rtlx-done])'
   );
-  inlines.forEach(el => {
+  candidates.forEach(el => {
     if (el.dataset.rtlxDone === '1') return;
+    el.dataset.rtlxDone = '1';
+
+    // For divs, only treat genuine text leaves — skip layout containers so we
+    // don't flip an entire card/section and break its button/grid alignment.
+    if (el.tagName === 'DIV' &&
+        el.querySelector('div, button, ul, ol, table, textarea, input, svg')) {
+      return;
+    }
+
     const text = el.textContent || '';
-    if (isRTLDominant(text) && !hasCodeAncestor(el)) {
+    if (text.trim() && isRTLDominant(text) && !hasCodeAncestor(el)) {
       el.setAttribute('dir', 'rtl');
       el.classList.add('rtlx-inline');
+      fixBiDiInElement(el);
     }
-    el.dataset.rtlxDone = '1';
   });
 }
 
@@ -453,7 +481,14 @@ function fixContainer(container) {
     const hasBlockChildren = [...BLOCK_ELEMENTS].some(
       tag => container.querySelector(tag.toLowerCase())
     );
-    if (!hasBlockChildren) {
+    // Don't flip a whole interactive/layout container (e.g. claude.ai/code's
+    // option cards with buttons + a Skip/Submit footer) to dir=rtl — that
+    // reverses its flex layout and misaligns the controls. The leaf-text
+    // pass in step 5 (fixInlineRTL) handles such cards' prose surgically.
+    const hasInteractiveLayout = container.querySelector(
+      'button, textarea, input, [role="textbox"]'
+    );
+    if (!hasBlockChildren && !hasInteractiveLayout) {
       container.setAttribute('dir', 'rtl');
       container.classList.add('rtlx-block');
       fixArrowsInElement(container);

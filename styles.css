@@ -20,10 +20,13 @@
   unicode-bidi: isolate;
 }
 
-/* ── 2. RTL Inline Elements ── */
+/* ── 2. RTL Inline / leaf-text Elements ── */
+/* text-align is a no-op on genuine inline elements (spans) but right-aligns
+   the leaf <div> text holders in claude.ai/code interactive cards. */
 .rtlx-scope .rtlx-inline {
   direction: rtl;
   unicode-bidi: isolate;
+  text-align: right;
 }
 
 /* ── 3a. Text/pseudocode blocks (no language class) — full RTL ── */
