@@ -44,6 +44,10 @@ const RESPONSE_SELECTORS = [
   // claude.ai/design (Cowork/Design UI) — styled-components hash classes
   // are unstable, so we anchor on the stable data-testid container instead.
   '[data-testid="chat-messages"]',
+  // Artifact / file-preview panel (e.g. previewing a generated .md file) —
+  // a separate panel from the chat list, not covered by the selectors above.
+  '.font-claude-response',
+  '[data-skill-file-viewer="true"]',
 ];
 
 // Block-level elements within responses to check for RTL
@@ -324,8 +328,11 @@ function fixKaTeXInContainer(container) {
 // Two strategies based on block type:
 // 1. "text" blocks (no language-* class): full RTL — direction: rtl, text-align: right
 //    These are pseudocode, explanations, etc. written in Persian.
-// 2. "code" blocks (has language-* class): per-line BiDi via unicode-bidi: plaintext
-//    These are actual code (Python, JS, etc.) where only comments may be Persian.
+// 2. "code" blocks (has language-* class, OR box-drawing tree art): per-line
+//    BiDi via unicode-bidi: plaintext. Real code AND ASCII/Unicode directory
+//    trees must stay LTR — flipping the whole block to dir="rtl" scrambles
+//    the ├── └── │ characters even though only the inline comments are Persian.
+const TREE_CHARS_REGEX = /[├└│─┌┐┘┬┴┼┣┗┃━┳┻╋]/;
 function fixCodeBlocks(container) {
   container.querySelectorAll('pre').forEach(pre => {
     if (pre.dataset.rtlxDone === '1') return;
@@ -336,8 +343,9 @@ function fixCodeBlocks(container) {
       const codeEl = pre.querySelector('code');
       if (codeEl) {
         codeEl.classList.add('rtlx-code-block');
-        // Detect if this is actual code or plain text
-        const isActualCode = /\blanguage-\w+/.test(codeEl.className || '');
+        // Detect if this is actual code/diagram or plain prose
+        const isActualCode = /\blanguage-\w+/.test(codeEl.className || '')
+          || TREE_CHARS_REGEX.test(text);
         pre.dataset.rtlxType = isActualCode ? 'code' : 'text';
 
         // For text blocks, also apply RTL attributes directly
@@ -401,6 +409,11 @@ function fixInlineRTL(container) {
 
 // ─── Main: Apply all RTL fixes to a single response container ─────────────
 function fixContainer(container) {
+  // Tag every matched container with one shared class so styles.css only
+  // needs a single ancestor selector instead of repeating per-UI selectors
+  // (classic chat, claude.ai/code, claude.ai/design, artifact viewer, etc.)
+  container.classList.add('rtlx-scope');
+
   // 1. Fix block-level elements
   const blockQuery = [...BLOCK_ELEMENTS].map(t => t.toLowerCase()).join(',');
   container.querySelectorAll(blockQuery).forEach(applyRTLToBlock);

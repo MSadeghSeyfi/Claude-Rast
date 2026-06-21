@@ -1,22 +1,27 @@
 /* ============================================================
    Claude RTL Fix — Injected Stylesheet
-   Scoped strictly to Claude.ai's assistant response content.
+   Scoped strictly to Claude.ai's assistant response content via
+   the .rtlx-scope class, which content.js applies to every matched
+   response/artifact container (classic chat, claude.ai/code,
+   claude.ai/design, artifact/file-preview panels, etc.).
    Does NOT affect any page UI (nav, sidebar, inputs, buttons).
    ============================================================ */
 
 /* ── 1. RTL Block Elements (paragraphs, headings, lists, etc.) ── */
-[data-message-author-role="assistant"] .rtlx-block,
-[data-message-author-role="assistant"] [dir="rtl"],
-.font-claude-message .rtlx-block,
-.font-claude-message [dir="rtl"] {
+/* Includes .rtlx-scope[dir="rtl"] itself — needed for plain <div> response
+   containers (e.g. claude.ai/design) with no block children, where the
+   fallback path sets dir="rtl" directly on the container element. */
+.rtlx-scope.rtlx-block,
+.rtlx-scope[dir="rtl"],
+.rtlx-scope .rtlx-block,
+.rtlx-scope [dir="rtl"] {
   direction: rtl !important;
   text-align: right !important;
   unicode-bidi: isolate;
 }
 
 /* ── 2. RTL Inline Elements ── */
-[data-message-author-role="assistant"] .rtlx-inline,
-.font-claude-message .rtlx-inline {
+.rtlx-scope .rtlx-inline {
   direction: rtl;
   unicode-bidi: isolate;
 }
@@ -24,48 +29,41 @@
 /* ── 3a. Text/pseudocode blocks (no language class) — full RTL ── */
 /* Persian pseudocode, explanations, etc. get full RTL treatment
    so BiDi algorithm correctly places English words within RTL flow. */
-[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="text"],
-[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="text"] code,
-.font-claude-message pre.rtlx-code-block[data-rtlx-type="text"],
-.font-claude-message pre.rtlx-code-block[data-rtlx-type="text"] code {
+.rtlx-scope pre.rtlx-code-block[data-rtlx-type="text"],
+.rtlx-scope pre.rtlx-code-block[data-rtlx-type="text"] code {
   direction: rtl !important;
   text-align: right !important;
 }
 
-/* ── 3b. Actual code blocks (has language-* class) — per-line BiDi ── */
-/* Real code stays LTR; only lines starting with Persian auto-detect RTL.
-   This handles Persian comments in Python/JS/etc. */
-[data-message-author-role="assistant"] pre.rtlx-code-block[data-rtlx-type="code"] code,
-.font-claude-message pre.rtlx-code-block[data-rtlx-type="code"] code {
+/* ── 3b. Actual code blocks (has language-* class, or box-drawing tree
+   art) — per-line BiDi ── */
+/* Real code and ASCII/Unicode directory trees stay LTR; only lines
+   starting with Persian auto-detect RTL. This handles Persian comments
+   in Python/JS/etc. and annotated file-tree diagrams alike. */
+.rtlx-scope pre.rtlx-code-block[data-rtlx-type="code"] code {
   unicode-bidi: plaintext;
 }
 
 /* ── 4. RTL List items ── */
-[data-message-author-role="assistant"] ul[dir="rtl"],
-[data-message-author-role="assistant"] ol[dir="rtl"],
-[data-message-author-role="assistant"] ul .rtlx-block,
-[data-message-author-role="assistant"] ol .rtlx-block,
-.font-claude-message ul[dir="rtl"],
-.font-claude-message ol[dir="rtl"] {
+.rtlx-scope ul[dir="rtl"],
+.rtlx-scope ol[dir="rtl"],
+.rtlx-scope ul .rtlx-block,
+.rtlx-scope ol .rtlx-block {
   direction: rtl !important;
   text-align: right !important;
   padding-right: 1.5em;
   padding-left: 0;
 }
 
-[data-message-author-role="assistant"] li[dir="rtl"],
-[data-message-author-role="assistant"] li.rtlx-block,
-.font-claude-message li[dir="rtl"],
-.font-claude-message li.rtlx-block {
+.rtlx-scope li[dir="rtl"],
+.rtlx-scope li.rtlx-block {
   direction: rtl !important;
   text-align: right !important;
 }
 
 /* ── 5. RTL Blockquotes ── */
-[data-message-author-role="assistant"] blockquote[dir="rtl"],
-[data-message-author-role="assistant"] blockquote.rtlx-block,
-.font-claude-message blockquote[dir="rtl"],
-.font-claude-message blockquote.rtlx-block {
+.rtlx-scope blockquote[dir="rtl"],
+.rtlx-scope blockquote.rtlx-block {
   direction: rtl !important;
   text-align: right !important;
   border-right: 4px solid currentColor;
@@ -75,26 +73,21 @@
 }
 
 /* ── 6. RTL Table Cells ── */
-[data-message-author-role="assistant"] td[dir="rtl"],
-[data-message-author-role="assistant"] th[dir="rtl"],
-.font-claude-message td[dir="rtl"],
-.font-claude-message th[dir="rtl"] {
+.rtlx-scope td[dir="rtl"],
+.rtlx-scope th[dir="rtl"] {
   direction: rtl !important;
   text-align: right !important;
 }
 
 /* ── 7. Mermaid SVG — RTL text nodes ── */
-[data-message-author-role="assistant"] svg text[data-rtlx="1"],
-[data-message-author-role="assistant"] svg tspan[data-rtlx="1"],
-.font-claude-message svg text[data-rtlx="1"],
-.font-claude-message svg tspan[data-rtlx="1"] {
+.rtlx-scope svg text[data-rtlx="1"],
+.rtlx-scope svg tspan[data-rtlx="1"] {
   direction: rtl;
   unicode-bidi: embed;
 }
 
 /* ── 8. ForeignObject inside Mermaid SVG (HTML-in-SVG) ── */
-[data-message-author-role="assistant"] svg foreignObject [dir="rtl"],
-.font-claude-message svg foreignObject [dir="rtl"] {
+.rtlx-scope svg foreignObject [dir="rtl"] {
   direction: rtl !important;
   text-align: right !important;
 }
@@ -123,8 +116,7 @@
 
 /* ── 10. Mixed-direction helpers ── */
 /* When a paragraph is RTL but contains LTR code/numbers inline */
-[data-message-author-role="assistant"] [dir="rtl"] code:not(.rtlx-code-block),
-.font-claude-message [dir="rtl"] code:not(.rtlx-code-block) {
+.rtlx-scope [dir="rtl"] code:not(.rtlx-code-block) {
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -133,10 +125,8 @@
 /* Math notation is universally LTR. When a parent block is RTL,
    the KaTeX rendered HTML must remain LTR to avoid mirrored subscripts,
    misplaced operators, and broken layout. */
-[data-message-author-role="assistant"] [dir="rtl"] .katex,
-.font-claude-message [dir="rtl"] .katex,
-[data-message-author-role="assistant"] .rtlx-block .katex,
-.font-claude-message .rtlx-block .katex {
+.rtlx-scope [dir="rtl"] .katex,
+.rtlx-scope .rtlx-block .katex {
   direction: ltr !important;
   unicode-bidi: isolate !important;
   display: inline-block !important;
@@ -144,14 +134,10 @@
 }
 
 /* Keep all KaTeX internals strictly LTR */
-[data-message-author-role="assistant"] [dir="rtl"] .katex-html,
-[data-message-author-role="assistant"] [dir="rtl"] .katex-mathml,
-.font-claude-message [dir="rtl"] .katex-html,
-.font-claude-message [dir="rtl"] .katex-mathml,
-[data-message-author-role="assistant"] .rtlx-block .katex-html,
-[data-message-author-role="assistant"] .rtlx-block .katex-mathml,
-.font-claude-message .rtlx-block .katex-html,
-.font-claude-message .rtlx-block .katex-mathml {
+.rtlx-scope [dir="rtl"] .katex-html,
+.rtlx-scope [dir="rtl"] .katex-mathml,
+.rtlx-scope .rtlx-block .katex-html,
+.rtlx-scope .rtlx-block .katex-mathml {
   direction: ltr !important;
   unicode-bidi: isolate !important;
   text-align: left !important;
