@@ -346,6 +346,75 @@ function fixArrowsInElement(el) {
   }
 }
 
+// ─── Render: raw LaTeX ($$…$$ / $…$) into actual math via bundled KaTeX ───
+// claude.ai/code (Epitaxy UI) does NOT render markdown math — it ships the
+// formulas as literal text like "$$SD = \sqrt{\frac{...}{n}}$$". We render
+// them ourselves with the KaTeX library bundled in the extension. Display
+// math ($$…$$) is matched before inline ($…$). For inline we require a
+// LaTeX-ish character inside (\, _, ^, {, }) so prices like "$5" / "$10"
+// aren't mistaken for math.
+const DISPLAY_MATH_REGEX = /\$\$([^$]+?)\$\$/;
+const INLINE_MATH_REGEX = /\$([^$\n]*[\\_^{}][^$\n]*?)\$/;
+const ANY_MATH_REGEX = new RegExp(
+  DISPLAY_MATH_REGEX.source + '|' + INLINE_MATH_REGEX.source, 'g'
+);
+
+function renderMathInTextNode(node) {
+  const text = node.nodeValue;
+  if (!text || text.indexOf('$') === -1) return;
+  ANY_MATH_REGEX.lastIndex = 0;
+  if (!ANY_MATH_REGEX.test(text)) return;
+
+  ANY_MATH_REGEX.lastIndex = 0;
+  const frag = document.createDocumentFragment();
+  let last = 0, m;
+  while ((m = ANY_MATH_REGEX.exec(text)) !== null) {
+    if (m.index > last) {
+      frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+    }
+    const display = m[1] !== undefined;        // matched the $$…$$ group
+    const tex = display ? m[1] : m[2];
+    const span = document.createElement('span');
+    span.setAttribute('dir', 'ltr');
+    span.dataset.rtlxDone = '1';                // don't re-process its text
+    try {
+      katex.render(tex.trim(), span, { displayMode: display, throwOnError: false });
+    } catch (e) {
+      span.textContent = m[0];                  // leave the raw source on failure
+    }
+    frag.appendChild(span);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    frag.appendChild(document.createTextNode(text.slice(last)));
+  }
+  node.parentNode.replaceChild(frag, node);
+}
+
+function renderRawLatexInContainer(container) {
+  if (typeof katex === 'undefined') return;     // library failed to load
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || node.nodeValue.indexOf('$') === -1) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (hasCodeAncestor(node)) return NodeFilter.FILTER_REJECT;
+      // Skip text already inside a rendered KaTeX span
+      let p = node.parentElement;
+      while (p) {
+        if (p.classList && p.classList.contains('katex')) {
+          return NodeFilter.FILTER_REJECT;
+        }
+        p = p.parentElement;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  nodes.forEach(renderMathInTextNode);
+}
+
 // ─── Fix: KaTeX/LaTeX elements inside RTL blocks — force LTR ─────────────
 // Math notation is universally LTR. The CSS handles visual styling, but
 // we also need to set attributes so the browser's BiDi algorithm doesn't
@@ -470,6 +539,11 @@ function fixContainer(container) {
   // needs a single ancestor selector instead of repeating per-UI selectors
   // (classic chat, claude.ai/code, claude.ai/design, artifact viewer, etc.)
   container.classList.add('rtlx-scope');
+
+  // 0. Render any raw LaTeX ($$…$$ / $…$) to real math FIRST, so the math
+  // becomes KaTeX spans and is removed from the text stream before the
+  // RTL/BiDi passes below would otherwise scramble its source characters.
+  renderRawLatexInContainer(container);
 
   // 1. Fix block-level elements
   const blockQuery = [...BLOCK_ELEMENTS].map(t => t.toLowerCase()).join(',');

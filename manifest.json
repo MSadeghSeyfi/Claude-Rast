@@ -18,9 +18,15 @@
   "content_scripts": [
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["content.js"],
-      "css": ["styles.css"],
+      "js": ["katex/katex.min.js", "content.js"],
+      "css": ["katex/katex.min.css", "styles.css"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["katex/fonts/*"],
+      "matches": ["https://claude.ai/*"]
     }
   ],
   "action": {
