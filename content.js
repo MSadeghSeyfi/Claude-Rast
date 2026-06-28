@@ -198,10 +198,31 @@ function fixBiDiInTextNode(textNode) {
   result = result.replace(/\$\$[^$]+?\$\$/g, m => LRI + m + PDI);
   result = wrapOutsideIsolates(result, /\$[^$\n]+?\$/g, m => LRI + m + PDI);
 
+  // Step 0.5: Wrap a WHOLE plain-text math formula in a single LTR isolate.
+  // claude.ai/code emits formulas like "P(W) = 0.9 → PP(W) = 0.9^(-1/100)
+  // ≈ 1.001" as literal text (no $…$). If the granular number/word steps
+  // below chop it into many isolates, the RTL line lays those chunks out
+  // right-to-left and the formula turns to gibberish (e.g. "1/100) = 10"
+  // straddling a paren). So we grab a maximal run of Latin/number/math
+  // characters and — only when it carries a real math signal (^ = ≈ ≤ ≥, a
+  // root, or a digit-operator-digit) — wrap the entire run as one LTR unit.
+  // Runs without such a signal (plain English, lone numbers) are left for
+  // the granular steps. Must run before Steps 1–4 so they skip its interior.
+  result = wrapOutsideIsolates(result,
+    /[A-Za-z0-9(][A-Za-z0-9\s().,^\/*+\-=<>≤≥≠≈±√×÷%|_{}→←⟶⟵⇒⇐➡⬅↦↤]*[0-9).]/g,
+    match => {
+      const hasMathSignal =
+        /[\^=≈≤≥≠√×÷]/.test(match) || /\d\s*[/*+\-]\s*\(?\s*-?\d/.test(match);
+      if (!hasMathSignal) return match;
+      return LRI + match + PDI;
+    }
+  );
+
   // Step 1: Wrap contiguous English word sequences in LRI...PDI isolates.
   // Optionally captures a leading integer so "2 GB", "16 MB", "2GB" stay as
   // a single LTR unit instead of two separate isolates that swap in RTL flow.
-  result = result.replace(
+  // wrapOutsideIsolates so words already inside a Step-0/0.5 isolate are left.
+  result = wrapOutsideIsolates(result,
     /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
     match => LRI + match + PDI
   );
@@ -211,7 +232,7 @@ function fixBiDiInTextNode(textNode) {
   // Greek letters (U+0370–U+03FF) are LTR but not caught by Step 1.
   // Without this, bare "α" between isolates creates a continuous LTR run
   // that swallows commas and breaks RTL ordering of parameter lists.
-  result = result.replace(
+  result = wrapOutsideIsolates(result,
     /[\u0370-\u03FF]\s*[=<>≤≥≠≈+\-×÷]\s*\d[\d.]*/g,
     match => LRI + match + PDI
   );
@@ -335,12 +356,12 @@ function fixArrowsInElement(el) {
       );
     }
 
-    // Swap arrow direction
+    // Swap arrow direction — but NOT for arrows already inside an LTR isolate
+    // (e.g. the "→" inside a whole-formula isolate from Step 0.5). Those read
+    // left-to-right as written; only arrows in the surrounding RTL flow
+    // (like "Settings → Billing") should flip.
     ARROW_REGEX.lastIndex = 0;
-    text = text.replace(
-      ARROW_REGEX,
-      match => ARROW_MAP[match] || match
-    );
+    text = wrapOutsideIsolates(text, ARROW_REGEX, match => ARROW_MAP[match] || match);
 
     textNode.nodeValue = text;
   }
@@ -350,11 +371,16 @@ function fixArrowsInElement(el) {
 // claude.ai/code (Epitaxy UI) does NOT render markdown math — it ships the
 // formulas as literal text like "$$SD = \sqrt{\frac{...}{n}}$$". We render
 // them ourselves with the KaTeX library bundled in the extension. Display
-// math ($$…$$) is matched before inline ($…$). For inline we require a
-// LaTeX-ish character inside (\, _, ^, {, }) so prices like "$5" / "$10"
-// aren't mistaken for math.
+// math ($$…$$) is matched before inline ($…$). Inline math is accepted when
+// EITHER it contains a LaTeX-ish character (\, _, ^, {, }) — e.g. "$Q_3$" —
+// OR it is a compact, whitespace-free token containing a letter — e.g. "$v$",
+// "$X$", "$d(v,X)$". The "no whitespace + has a letter" rule is what keeps
+// prose-with-prices like "$5 and $10" from being mistaken for math (its
+// content "5 and " has spaces and no leading letter), while still catching
+// single-variable math that has no LaTeX special characters at all.
 const DISPLAY_MATH_REGEX = /\$\$([^$]+?)\$\$/;
-const INLINE_MATH_REGEX = /\$([^$\n]*[\\_^{}][^$\n]*?)\$/;
+const INLINE_MATH_REGEX =
+  /\$((?:[^$\n]*[\\_^{}][^$\n]*?)|(?:[^\s$]*[A-Za-z][^\s$]*))\$/;
 const ANY_MATH_REGEX = new RegExp(
   DISPLAY_MATH_REGEX.source + '|' + INLINE_MATH_REGEX.source, 'g'
 );
