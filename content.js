@@ -382,8 +382,15 @@ function fixArrowsInElement(el) {
 // content "5 and " has spaces and no leading letter), while still catching
 // single-variable math that has no LaTeX special characters at all.
 const DISPLAY_MATH_REGEX = /\$\$([^$]+?)\$\$/;
+// Inline math accepted when the $…$ content is EITHER (1) LaTeX-ish — contains
+// \, _, ^, {, } — e.g. "$Q_3$";  OR (2) a compact whitespace-free token with a
+// letter — e.g. "$v$", "$d(v,X)$";  OR (3) a spaced expression that still
+// carries a clear math signal — a letter AND one structural operator
+// (= < > | ^ _ { } \) — e.g. "$P(y=1|x) = ?$".  The letter+operator guard on
+// (3) keeps prose/prices like "$5 for lunch and $3" from matching (no letter
+// beside an operator), while allowing genuine spaced formulas KaTeX can render.
 const INLINE_MATH_REGEX =
-  /\$((?:[^$\n]*[\\_^{}][^$\n]*?)|(?:[^\s$]*[A-Za-z][^\s$]*))\$/;
+  /\$((?:[^$\n]*[\\_^{}][^$\n]*?)|(?:[^\s$]*[A-Za-z][^\s$]*)|(?:(?=[^$\n]*[A-Za-z])(?=[^$\n]*[=<>|^_{}\\])[^$\n]+?))\$/;
 const ANY_MATH_REGEX = new RegExp(
   DISPLAY_MATH_REGEX.source + '|' + INLINE_MATH_REGEX.source, 'g'
 );
@@ -442,6 +449,98 @@ function renderRawLatexInContainer(container) {
   const nodes = [];
   while (walker.nextNode()) nodes.push(walker.currentNode);
   nodes.forEach(renderMathInTextNode);
+}
+
+// ─── Render: raw LaTeX whose $…$ was split across inline elements ─────────
+// claude.ai's markdown renderer treats underscores inside a formula as
+// emphasis, so "$\int_{-\infty}^{x_0}…\int_{x_0}^{\infty}… = 1$" arrives as
+//   text "$\int"  +  <em>{-\infty}^{x_0}…+ \int</em>  +  text "{x_0}^… = 1$"
+// — the eaten "_…_" underscores became an <em>. The single-text-node KaTeX
+// pass and the $…$ BiDi wrap both miss it (no ONE node holds both $ delimiters)
+// and the RTL flow then scrambles the pieces. Here we reconstruct the original
+// source across a parent's direct children — turning each leaf <em>/<i> back
+// into its eaten "_…_" — locate the whole $…$ span, and replace that DOM range
+// with a single KaTeX-rendered span. Kept conservative: a cross-element match
+// must carry a real LaTeX structural char (\ { }) so ordinary italic prose that
+// merely sits between two unrelated '$' is never swallowed as math.
+const MD_ITALIC_TAGS = new Set(['EM', 'I']);
+const OPAQUE_SENTINEL = ''; // U+E000 private-use: never in page text, marks non-math nodes
+function renderMathAcrossInlineElements(container) {
+  if (typeof katex === 'undefined') return;         // library failed to load
+  const parents = new Set();
+  container.querySelectorAll('em, i').forEach(e => {
+    const p = e.parentElement;
+    if (p && (p.textContent || '').indexOf('$') !== -1 && !hasCodeAncestor(p)) {
+      parents.add(p);
+    }
+  });
+  parents.forEach(p => {
+    // One parent may hold several formulas; re-scan until none remain.
+    for (let guard = 0; guard < 20; guard++) {
+      if (!renderOneCrossElementFormula(p)) break;
+    }
+  });
+}
+
+function renderOneCrossElementFormula(el) {
+  // Build a reconstructed source string mapped back to el's direct children.
+  let src = '';
+  const segs = [];
+  for (const node of el.childNodes) {
+    let rebuilt;
+    if (node.nodeType === Node.TEXT_NODE) {
+      rebuilt = node.nodeValue || '';
+      segs.push({ kind: 'text', node, srcStart: src.length, len: rebuilt.length });
+    } else if (node.nodeType === Node.ELEMENT_NODE &&
+               MD_ITALIC_TAGS.has(node.tagName) && !node.querySelector('*')) {
+      // Leaf <em>/<i>: markdown ate its surrounding underscores — rebuild "_…_".
+      rebuilt = '_' + (node.textContent || '') + '_';
+      segs.push({ kind: 'em', node, srcStart: src.length, len: rebuilt.length });
+    } else {
+      // katex span, code, nested markup, <br>, … — opaque, breaks any region.
+      rebuilt = OPAQUE_SENTINEL;
+      segs.push({ kind: 'opaque', node, srcStart: src.length, len: rebuilt.length });
+    }
+    src += rebuilt;
+  }
+  if (src.indexOf('$') === -1) return false;
+
+  const segAt = (i) => segs.find(s => i >= s.srcStart && i < s.srcStart + s.len);
+
+  ANY_MATH_REGEX.lastIndex = 0;
+  let m;
+  while ((m = ANY_MATH_REGEX.exec(src)) !== null) {
+    const start = m.index;
+    const end = m.index + m[0].length;
+    if (m.index === ANY_MATH_REGEX.lastIndex) ANY_MATH_REGEX.lastIndex++;
+
+    const region = src.slice(start, end);
+    if (region.indexOf(OPAQUE_SENTINEL) !== -1) continue; // opaque node inside
+    if (!/[\\{}]/.test(region)) continue;                 // require real LaTeX signal
+    const segStart = segAt(start);
+    const segEnd = segAt(end - 1);
+    if (!segStart || !segEnd) continue;
+    if (segStart === segEnd) continue;                    // single node → text path handles it
+    if (segStart.kind !== 'text' || segEnd.kind !== 'text') continue; // $ must be literal text
+
+    const display = m[1] !== undefined;
+    const tex = (display ? m[1] : m[2]).trim();
+    const range = document.createRange();
+    range.setStart(segStart.node, start - segStart.srcStart);
+    range.setEnd(segEnd.node, end - segEnd.srcStart);
+    const span = document.createElement('span');
+    span.setAttribute('dir', 'ltr');
+    span.dataset.rtlxDone = '1';
+    try {
+      katex.render(tex, span, { displayMode: display, throwOnError: false });
+    } catch (e) {
+      span.textContent = m[0];                            // leave raw source on failure
+    }
+    range.deleteContents();
+    range.insertNode(span);
+    return true;                                          // DOM changed; caller re-scans
+  }
+  return false;
 }
 
 // ─── Fix: KaTeX/LaTeX elements inside RTL blocks — force LTR ─────────────
@@ -579,7 +678,12 @@ function fixContainer(container) {
   // normalize() re-joins the fragments so the formula is contiguous again.
   container.normalize();
 
-  // 0b. Render any raw LaTeX ($$…$$ / $…$) to real math FIRST, so the math
+  // 0b. Reconstruct + render formulas whose $…$ was split across inline
+  // elements (markdown turned a formula's underscores into <em>). Must run
+  // before the single-text-node pass and the BiDi pass below.
+  renderMathAcrossInlineElements(container);
+
+  // 0c. Render any remaining raw LaTeX ($$…$$ / $…$) to real math, so the math
   // becomes KaTeX spans and is removed from the text stream before the
   // RTL/BiDi passes below would otherwise scramble its source characters.
   renderRawLatexInContainer(container);
