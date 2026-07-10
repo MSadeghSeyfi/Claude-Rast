@@ -221,9 +221,12 @@ function fixBiDiInTextNode(textNode) {
   // Step 1: Wrap contiguous English word sequences in LRI...PDI isolates.
   // Optionally captures a leading integer so "2 GB", "16 MB", "2GB" stay as
   // a single LTR unit instead of two separate isolates that swap in RTL flow.
+  // Apostrophes (straight ' and typographic ’) count as intra-word chars so
+  // "Ockham's Razor" stays ONE isolate; otherwise it splits into ⁦Ockham⁩'⁦s
+  // Razor⁩ and the RTL flow reverses the pieces to "s Razor'Ockham".
   // wrapOutsideIsolates so words already inside a Step-0/0.5 isolate are left.
   result = wrapOutsideIsolates(result,
-    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
+    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w'’]*(?:[\s\-]+[A-Za-z][\w'’]*)*/g,
     match => LRI + match + PDI
   );
 
@@ -351,7 +354,7 @@ function fixArrowsInElement(el) {
     // with the swapped arrows.
     if (!hasRTLChars(text) && text.indexOf(LRI) === -1) {
       text = text.replace(
-        /[A-Za-z][\w]*(?:[\s\-]+[A-Za-z][\w]*)*/g,
+        /[A-Za-z][\w'’]*(?:[\s\-]+[A-Za-z][\w'’]*)*/g,
         match => LRI + match + PDI
       );
     }
@@ -566,7 +569,17 @@ function fixContainer(container) {
   // (classic chat, claude.ai/code, claude.ai/design, artifact viewer, etc.)
   container.classList.add('rtlx-scope');
 
-  // 0. Render any raw LaTeX ($$…$$ / $…$) to real math FIRST, so the math
+  // 0a. Merge adjacent text-node fragments before anything else. Another
+  // installed extension (e.g. the Persian font-changer "Fontara") splits a
+  // paragraph's Latin runs into separate sibling text nodes to restyle them.
+  // That fragmentation breaks a raw formula like "$\int_{x_0}^{\infty}...$"
+  // across many nodes, so neither the KaTeX pass nor Step 0 (which need the
+  // whole $…$ inside ONE text node) can see it — each Latin token then gets
+  // isolated on its own and the RTL flow scrambles it to "$\⁦int⁩_{⁦x_0⁩}…".
+  // normalize() re-joins the fragments so the formula is contiguous again.
+  container.normalize();
+
+  // 0b. Render any raw LaTeX ($$…$$ / $…$) to real math FIRST, so the math
   // becomes KaTeX spans and is removed from the text stream before the
   // RTL/BiDi passes below would otherwise scramble its source characters.
   renderRawLatexInContainer(container);
