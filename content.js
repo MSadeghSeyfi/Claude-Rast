@@ -224,9 +224,23 @@ function fixBiDiInTextNode(textNode) {
   // Apostrophes (straight ' and typographic ’) count as intra-word chars so
   // "Ockham's Razor" stays ONE isolate; otherwise it splits into ⁦Ockham⁩'⁦s
   // Razor⁩ and the RTL flow reverses the pieces to "s Razor'Ockham".
+  // Two kinds of intra-run connector keep a technical token as ONE LTR unit
+  // instead of splitting into pieces the RTL flow then reverses:
+  //   • a "tight" "-", "/" or "." glued directly to the next alphanumeric —
+  //     so "reviewer/advisor", "figure/caption", "claude.ai/code", file paths
+  //     like "Article_LATEX/emnlp2023.tex", and letter-hyphen-DIGIT codes like
+  //     "DA-1", "GPT-4", "SDCP-v2", "v1.2.0" all stay whole (without this the
+  //     "-1" of "DA-1" is grabbed by the operator+number step into ⁦DA⁩⁦-1⁩);
+  //   • whitespace (optionally led by a "," / ";" for enumerations, and
+  //     optionally wrapping a " / " or " - ") followed by a LETTER — so
+  //     "prompt anchoring", "ARR / EMNLP" and "(DA-1, DA-2)" join as one LTR
+  //     unit (otherwise the two codes swap in RTL to "(DA-2, DA-1)"), but
+  //     "Slack. Then", "word 5" and a comma before a Persian word do NOT (the
+  //     mandatory Latin letter after the separator keeps sentence periods,
+  //     word+number pairs, and Persian list items split).
   // wrapOutsideIsolates so words already inside a Step-0/0.5 isolate are left.
   result = wrapOutsideIsolates(result,
-    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w'’]*(?:[\s\-]+[A-Za-z][\w'’]*)*/g,
+    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[,;]?\s+(?:[/\-]\s+)?[A-Za-z][\w'’]*))*/g,
     match => LRI + match + PDI
   );
 
@@ -354,7 +368,7 @@ function fixArrowsInElement(el) {
     // with the swapped arrows.
     if (!hasRTLChars(text) && text.indexOf(LRI) === -1) {
       text = text.replace(
-        /[A-Za-z][\w'’]*(?:[\s\-]+[A-Za-z][\w'’]*)*/g,
+        /[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[,;]?\s+(?:[/\-]\s+)?[A-Za-z][\w'’]*))*/g,
         match => LRI + match + PDI
       );
     }
