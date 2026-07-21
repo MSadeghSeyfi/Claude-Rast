@@ -231,8 +231,11 @@ function fixBiDiInTextNode(textNode) {
   //     like "Article_LATEX/emnlp2023.tex", and letter-hyphen-DIGIT codes like
   //     "DA-1", "GPT-4", "SDCP-v2", "v1.2.0" all stay whole (without this the
   //     "-1" of "DA-1" is grabbed by the operator+number step into ⁦DA⁩⁦-1⁩);
+  //   • a "+" glued or spaced between two LETTER-started runs — so
+  //     "HyDE+KBDemo", "NQ+TriviaQA" and "Seyfi + advisor Daneshfar" join
+  //     (but "score + 5" and "+4.5" stay out — "+" only bridges to a letter);
   //   • whitespace (optionally led by a "," / ";" for enumerations, and
-  //     optionally wrapping a " / " or " - ") followed by a LETTER — so
+  //     optionally wrapping a " / ", " - " or " + ") followed by a LETTER — so
   //     "prompt anchoring", "ARR / EMNLP" and "(DA-1, DA-2)" join as one LTR
   //     unit (otherwise the two codes swap in RTL to "(DA-2, DA-1)"), but
   //     "Slack. Then", "word 5" and a comma before a Persian word do NOT (the
@@ -240,7 +243,7 @@ function fixBiDiInTextNode(textNode) {
   //     word+number pairs, and Persian list items split).
   // wrapOutsideIsolates so words already inside a Step-0/0.5 isolate are left.
   result = wrapOutsideIsolates(result,
-    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[,;]?\s+(?:[/\-]\s+)?[A-Za-z][\w'’]*))*/g,
+    /(?<![.\d\w])(?:\d+\s*)?[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[+][A-Za-z][\w'’]*)|(?:[,;]?\s+(?:[/\-+]\s+)?[A-Za-z][\w'’]*))*/g,
     match => LRI + match + PDI
   );
 
@@ -368,7 +371,7 @@ function fixArrowsInElement(el) {
     // with the swapped arrows.
     if (!hasRTLChars(text) && text.indexOf(LRI) === -1) {
       text = text.replace(
-        /[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[,;]?\s+(?:[/\-]\s+)?[A-Za-z][\w'’]*))*/g,
+        /[A-Za-z][\w'’]*(?:(?:[-/.][A-Za-z0-9][\w'’]*)|(?:[+][A-Za-z][\w'’]*)|(?:[,;]?\s+(?:[/\-+]\s+)?[A-Za-z][\w'’]*))*/g,
         match => LRI + match + PDI
       );
     }
