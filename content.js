@@ -75,6 +75,9 @@ const LRM = '\u200E'; // Left-to-Right Mark
 const RLI = '\u2067'; // Right-to-Left Isolate
 const LRI = '\u2066'; // Left-to-Right Isolate
 const PDI = '\u2069'; // Pop Directional Isolate
+// All BiDi control chars this script injects \u2014 used to strip a node/block back
+// to its clean text so a partially-processed (mid-stream) node can be redone.
+const BIDI_CTRL_RE = /[\u200e\u200f\u2066\u2067\u2068\u2069]/g;
 
 // ─── Utility: Check if text contains RTL characters ───────────────────────
 function hasRTLChars(text) {
@@ -168,18 +171,34 @@ function wrapOutsideIsolates(str, regex, wrapFn) {
 // Step order matters — multi-digit decimals (0.5) must be wrapped BEFORE
 // operator+number (=0.5) to avoid nested isolates like ⁦=⁦0.5⁩⁩.
 function fixBiDiInTextNode(textNode) {
-  const text = textNode.nodeValue;
+  let text = textNode.nodeValue;
   if (!text) return;
-  // Skip if already processed (contains isolate chars)
-  if (text.indexOf(LRI) !== -1 || text.indexOf(RLI) !== -1) return;
+  // If this node still carries isolates from an earlier (possibly partial,
+  // mid-stream) pass, strip them and reprocess the whole CURRENT text. A node
+  // that was isolated while streaming and then grew would otherwise keep its
+  // stale partial isolation forever (we used to just skip it here), leaving
+  // e.g. "⁦Gaussian⁩ Process" that the RTL flow renders as "Process Gaussian".
+  // Stripping first makes reprocessing idempotent on already-correct nodes.
+  const stripped = text.replace(BIDI_CTRL_RE, '');
+  if (stripped !== text) {
+    text = stripped;
+    textNode.nodeValue = text;
+  }
 
   // This function only runs on text nodes inside a block we already marked
-  // dir="rtl". A text node with NO RTL characters (e.g. a pure-English
-  // suggestion chip like "Explain like I'm 5") still needs isolating \u2014
-  // otherwise a trailing/standalone digit gets visually relocated by the
-  // browser's native BiDi algorithm under the RTL paragraph context.
+  // dir="rtl". A text node with NO RTL characters is left ALONE when it is
+  // purely alphabetic: strongly left-to-right text (an English term, a bold
+  // acronym like "TabPFN", a quoted phrase like \u00abMANDATORY at session end\u00bb)
+  // is kept intact and in order by the browser's own BiDi \u2014 wrapping it in an
+  // isolate would instead turn it into a neutral that SWAPS places with an
+  // adjacent isolated sibling. That is exactly what breaks a bold "**TabPFN**"
+  // sitting right before "(Author, 2023)" (it reverses to "Author) TabPFN(")
+  // and what scrambles English words as they stream in one node at a time.
+  // We only isolate when the node carries a DIGIT \u2014 a lone/trailing number
+  // (e.g. the "5" in "Explain like I'm 5", or "ICLR 2023") really does get
+  // relocated by the RTL BiDi, so it needs the isolate.
   if (!hasRTLChars(text)) {
-    if (text.trim() && /[A-Za-z0-9]/.test(text)) {
+    if (text.trim() && /\d/.test(text)) {
       textNode.nodeValue = LRI + text + PDI;
     }
     return;
@@ -319,9 +338,18 @@ function fixBiDiInElement(el) {
 const BLOCK_RTL_THRESHOLD = 0.12;
 
 function applyRTLToBlock(el) {
-  if (el.dataset.rtlxDone === '1') return; // already processed stably
   const text = el.textContent || '';
   if (!text.trim()) return;
+  // Reprocess while streaming GROWS the block. The signature is the clean text
+  // length (our own injected control chars stripped, so re-isolating a node
+  // doesn't perturb it). Claude streams a response token-by-token into the same
+  // block; a one-shot `data-rtlxDone` gate froze the block at whatever partial
+  // text existed on the first pass, so later-arriving words never got joined to
+  // their run (→ "⁦Gaussian⁩ Process" rendering as "Process Gaussian"). Once the
+  // text stops changing, the signature stabilises and reprocessing stops.
+  const sig = String(text.replace(BIDI_CTRL_RE, '').length);
+  if (el.dataset.rtlxSig === sig) return;
+  el.dataset.rtlxSig = sig;
 
   if (isRTLDominant(textExcludingCode(el), BLOCK_RTL_THRESHOLD)) {
     el.setAttribute('dir', 'rtl');
@@ -329,8 +357,6 @@ function applyRTLToBlock(el) {
     fixBiDiInElement(el);
     fixArrowsInElement(el);
   }
-  // Mark as processed so we don't re-check on every mutation
-  el.dataset.rtlxDone = '1';
 }
 
 // ─── Fix: Replace LTR arrows with RTL arrows in text nodes ───────────────
